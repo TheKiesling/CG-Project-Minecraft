@@ -9,7 +9,7 @@ void Camera::rotate(float deltaX, float deltaY) {
   glm::quat quatRotY = glm::angleAxis(glm::radians(deltaX * rotationSpeed), glm::vec3(0.0f, 1.0f, 0.0f));
   glm::quat quatRotX = glm::angleAxis(glm::radians(deltaY * rotationSpeed), glm::vec3(1.0f, 0.0f, 0.0f));
 
-  position = target + quatRotY * (position - target);
+  position = target + quatRotX * (position - target);
   position = target + quatRotY * (position - target);
 }
 

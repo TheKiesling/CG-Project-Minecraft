@@ -14,6 +14,7 @@
 #include "sphere.h"
 #include "light.h"
 #include "camera.h"
+#include "cube.h"
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
@@ -68,7 +69,6 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
         return Color(173, 216, 230);
     }
 
-
     glm::vec3 lightDir = glm::normalize(light.position - intersect.point);
     glm::vec3 viewDir = glm::normalize(rayOrigin - intersect.point);
     glm::vec3 reflectDir = glm::reflect(-lightDir, intersect.normal); 
@@ -81,7 +81,6 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
     Material mat = hitObject->material;
 
     float specLightIntensity = std::pow(std::max(0.0f, glm::dot(viewDir, reflectDir)), mat.specularCoefficient);
-
 
     Color reflectedColor(0.0f, 0.0f, 0.0f);
     if (mat.reflectivity > 0) {
@@ -96,8 +95,6 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
         refractedColor = castRay(origin, refractDir, recursion + 1); 
     }
 
-
-
     Color diffuseLight = mat.diffuse * light.intensity * diffuseLightIntensity * mat.albedo * shadowIntensity;
     Color specularLight = light.color * light.intensity * specLightIntensity * mat.specularAlbedo * shadowIntensity;
     Color color = (diffuseLight + specularLight) * (1.0f - mat.reflectivity - mat.transparency) + reflectedColor * mat.reflectivity + refractedColor * mat.transparency;
@@ -106,12 +103,12 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
 
 void setUp() {
     Material rubber = {
-        Color(80, 0, 0),   // diffuse
-        0.9,
-        0.1,
-        10.0f,
-        0.0f,
-        0.0f
+            Color(155,155,155),   // diffuse
+            0.9,
+            0.1,
+            10.0f,
+            0.0f,
+            0.0f
     };
 
     Material ivory = {
@@ -140,23 +137,29 @@ void setUp() {
         0.2f,
         1.0f,
     };
-    objects.push_back(new Sphere(glm::vec3(0.0f, 0.0f, 0.0f), 1.0f, rubber));
-    objects.push_back(new Sphere(glm::vec3(-1.0f, 0.0f, -4.0f), 1.0f, ivory));
-    objects.push_back(new Sphere(glm::vec3(1.0f, 0.0f, -4.0f), 1.0f, mirror));
-    objects.push_back(new Sphere(glm::vec3(0.0f, 1.0f, -3.0f), 1.0f, glass));
+
+    Material lightMat = {
+        Color(255, 255, 255),
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f,
+        0.0f
+    };
+
+    objects.push_back(new Cube(glm::vec3(0.0f, -1.0f, -5.0f), 0.5f, rubber));
+    objects.push_back(new Cube(glm::vec3(0.0f, 1.0f, -5.0f), 1.0f, ivory));
 }
 
 void render() {
     float fov = 3.1415/3;
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
-            /*
+
             float random_value = static_cast<float>(std::rand())/static_cast<float>(RAND_MAX);
-            if (random_value < 0.0) {
+            if (random_value < 0.0 ) {
                 continue;
             }
-            */
-
 
             float screenX = (2.0f * (x + 0.5f)) / SCREEN_WIDTH - 1.0f;
             float screenY = -(2.0f * (y + 0.5f)) / SCREEN_HEIGHT + 1.0f;

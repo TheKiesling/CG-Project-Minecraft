@@ -7,14 +7,24 @@
 #include <string>
 #include <glm/glm.hpp>
 #include <vector>
+#include "glm/ext.hpp"
 
 #include "color.h"
 #include "intersect.h"
 #include "object.h"
-#include "sphere.h"
 #include "light.h"
 #include "camera.h"
 #include "cube.h"
+#include "imageloader.h"
+#include "skybox.h"
+
+#include "./materials/netherrack.h"
+#include "./materials/obsidian.h"
+#include "./materials/portal.h"
+#include "./materials/gold.h"
+#include "./materials/diamond.h"
+#include "./materials/stone.h"
+
 
 const int SCREEN_WIDTH = 800;
 const int SCREEN_HEIGHT = 600;
@@ -25,9 +35,9 @@ const float BIAS = 0.0001f;
 SDL_Renderer* renderer;
 std::vector<Object*> objects;
 Light light = {
-    glm::vec3(0.0f, 0.0f, 0.0f),
-    1.0f,
-    Color(255, 255, 255),
+    glm::vec3(-10.0f, 10.0f, 20.0f), 
+    1.0f, 
+    Color(255, 0,0)
 };
 Camera camera(glm::vec3(0.0, 0.0, 5.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f), 10.0f);
 
@@ -51,14 +61,14 @@ float castShadow(const glm::vec3& shadowOrigin, const glm::vec3& lightDir, Objec
     return 1.0f;
 }
 
-Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const short recursion = 0) {
+Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const short recursion = 0, Object* currentObj = nullptr) {
     float zBuffer = 99999;
     Object* hitObject = nullptr;
     Intersect intersect;
 
     for (const auto& object : objects) {
         Intersect i = object->rayIntersect(rayOrigin, rayDirection);
-        if (i.isIntersecting && i.dist < zBuffer) {
+        if (i.isIntersecting && i.dist < zBuffer && currentObj != object) {
             zBuffer = i.dist;
             hitObject = object;
             intersect = i;
@@ -66,12 +76,13 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
     }
 
     if (!intersect.isIntersecting || recursion == MAX_RECURSION) {
-        return Color(173, 216, 230);
+        // return Color(173, 216, 230);
+        return Skybox::getColor(rayOrigin, rayDirection);
     }
 
     glm::vec3 lightDir = glm::normalize(light.position - intersect.point);
     glm::vec3 viewDir = glm::normalize(rayOrigin - intersect.point);
-    glm::vec3 reflectDir = glm::reflect(-lightDir, intersect.normal); 
+    glm::vec3 reflectDir = glm::reflect(-glm::normalize(rayOrigin), intersect.normal);     
 
     float shadowIntensity = castShadow(intersect.point, lightDir, hitObject);
 
@@ -85,81 +96,125 @@ Color castRay(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, const s
     Color reflectedColor(0.0f, 0.0f, 0.0f);
     if (mat.reflectivity > 0) {
         glm::vec3 origin = intersect.point + intersect.normal * BIAS;
-        reflectedColor = castRay(origin, reflectDir, recursion + 1); 
+        reflectedColor = castRay(origin, reflectDir, recursion + 1, hitObject); 
     }
 
     Color refractedColor(0.0f, 0.0f, 0.0f);
     if (mat.transparency > 0) {
         glm::vec3 origin = intersect.point - intersect.normal * BIAS;
         glm::vec3 refractDir = glm::refract(rayDirection, intersect.normal, mat.refractionIndex);
-        refractedColor = castRay(origin, refractDir, recursion + 1); 
+        refractedColor = castRay(origin, refractDir, recursion + 1, hitObject); 
     }
 
-    Color diffuseLight = mat.diffuse * light.intensity * diffuseLightIntensity * mat.albedo * shadowIntensity;
+    Color materialLight = intersect.hasColor ? intersect.color : mat.diffuse;
+
+    Color diffuseLight = materialLight * light.intensity * diffuseLightIntensity * mat.albedo * shadowIntensity;
     Color specularLight = light.color * light.intensity * specLightIntensity * mat.specularAlbedo * shadowIntensity;
     Color color = (diffuseLight + specularLight) * (1.0f - mat.reflectivity - mat.transparency) + reflectedColor * mat.reflectivity + refractedColor * mat.transparency;
     return color;
 } 
 
 void setUp() {
-    Material rubber = {
-            Color(155,155,155),   // diffuse
-            0.9,
-            0.1,
-            10.0f,
-            0.0f,
-            0.0f
-    };
-
-    Material ivory = {
-        Color(100, 100, 80),
-        0.5,
-        0.5,
-        50.0f,
-        0.4f,
-        0.0f
-    };
-
-    Material mirror = {
-        Color(255, 255, 255),
+    Material obsidian = {
+        Color(0, 0, 0),
+        0.8f,
         0.0f,
-        10.0f,
-        1425.0f,
-        0.9f,
-        0.0f
-    };
-
-    Material glass = {
-        Color(255, 255, 255),
-        0.0f,
-        10.0f,
-        1425.0f,
+        1000.0f,
         0.2f,
-        1.0f,
-    };
-
-    Material lightMat = {
-        Color(255, 255, 255),
-        0.0f,
-        0.0f,
-        0.0f,
-        0.0f,
         0.0f
     };
 
-    objects.push_back(new Cube(glm::vec3(0.0f, -1.0f, -5.0f), 0.5f, rubber));
-    objects.push_back(new Cube(glm::vec3(0.0f, 1.0f, -5.0f), 1.0f, ivory));
+    Material portal = {
+        Color(128, 0, 128),  
+        1.0f,   
+        1.0f,             
+        0.9f,                
+        0.1f,               
+        0.5f,                
+        1.5f                 
+    };
+    
+    Material gold = {
+        Color(255, 215, 0),   
+        1.0f,                 
+        8.0f,                 
+        0.4f,                
+        0.6f,                 
+        0.0f,                 
+        1.5f                  
+    };
+
+    Material diamond = {
+        Color(127, 213, 240), 
+        1.0f,                  
+        10.0f,              
+        0.8f,                
+        0.8f,                  
+        0.0f,                  
+        2.4f                   
+    };
+
+    Material netherrack = {
+        Color(153, 25, 25),  
+        1.0f,                
+        0.5f,                
+        0.3f,                
+        0.1f,                
+        0.0f,                
+        1.0f                 
+    };
+
+    Material stone = {
+        Color(128, 128, 128), 
+        1.0f,                 
+        0.0f,              
+        0.0f,               
+        0.0f,               
+        0.0f,                
+        1.0f                 
+    };
+
+
+    objects.push_back(new Netherrack(glm::vec3(-1.5f, -0.5f, -1.0f), glm::vec3(3.0f, 0.0f, -4.0f), netherrack));
+    objects.push_back(new Netherrack(glm::vec3(-2.0f, -1.5f, 0.0f), glm::vec3(3.5f, -1.0f, -4.0f), netherrack));
+    objects.push_back(new Netherrack(glm::vec3(-2.0f, -1.0f, -1.5f), glm::vec3(3.5f, -0.5f, -4.0f), netherrack));
+
+
+    objects.push_back(new Stone(glm::vec3(-1.5f, -1.0f, 0.0f), glm::vec3(3.0f, -0.75f, -1.0f), stone));
+    objects.push_back(new Stone(glm::vec3(-1.5f, -0.75f, -0.25f), glm::vec3(3.0f, -0.5f, -1.0f), stone));
+    objects.push_back(new Stone(glm::vec3(-1.5f, -0.5f, -0.5f), glm::vec3(3.0f, -0.25f, -1.0f), stone));
+    objects.push_back(new Stone(glm::vec3(-1.0f, -0.25f, -0.75f), glm::vec3(2.5f, 0.0f, -1.0f), stone));
+
+    objects.push_back(new Stone(glm::vec3(3.0f, -1.0f, -0.5f), glm::vec3(3.5f, -0.75f, -0.75f), stone));
+    objects.push_back(new Stone(glm::vec3(3.0f, -1.0f, -0.75f), glm::vec3(3.5f, -0.5f, -1.0f), stone));
+    objects.push_back(new Stone(glm::vec3(3.0f, -1.0f, -1.0f), glm::vec3(3.5f, 2.0f, -1.5f), stone));
+
+    objects.push_back(new Stone(glm::vec3(-2.0f, -1.0f, -0.5f), glm::vec3(-1.5f, -0.75f, -0.75f), stone));
+    objects.push_back(new Stone(glm::vec3(-2.0f, -1.0f, -0.75f), glm::vec3(-1.5f, -0.5f, -1.0f), stone));
+    objects.push_back(new Stone(glm::vec3(-2.0f, -1.0f, -1.0f), glm::vec3(-1.5f, 3.5f, -1.5f), stone));
+
+    objects.push_back(new Stone(glm::vec3(-2.0f, 3.0f, -1.0f), glm::vec3(0.0f, 3.5f, -1.5f), stone));
+    objects.push_back(new Stone(glm::vec3(-2.0f, 2.5f, -1.0f), glm::vec3(-1.0f, 3.0f, -1.5f), stone));
+
+    objects.push_back(new Gold(glm::vec3(0.0f, 3.0f, -1.0f), glm::vec3(1.0f, 3.5f, -1.5f), gold)); 
+
+    objects.push_back(new Obsidian(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(1.5f, 0.5f, -1.5f), obsidian)); 
+    objects.push_back(new Obsidian(glm::vec3(-0.5f, 0.5f, -1.0f), glm::vec3(0.0f, 2.5f, -1.5f), obsidian)); 
+    objects.push_back(new Obsidian(glm::vec3(1.5f, 0.5f, -1.0f), glm::vec3(2.0f, 2.5f, -1.5f), obsidian)); 
+    objects.push_back(new Obsidian(glm::vec3(0.0f, 2.5f, -1.0f), glm::vec3(1.5f, 3.0f, -1.5f), obsidian)); 
+
+    objects.push_back(new Portal(glm::vec3(0.0f, 0.5f, -1.0f), glm::vec3(1.5f, 2.5f, -1.5f), portal));
+
+    objects.push_back(new Gold(glm::vec3(-1.5f, 0.0f, -3.0f), glm::vec3(0.5f, 2.1f, -4.0f), gold)); 
+
+    objects.push_back(new Diamond(glm::vec3(1.0f, 0.0f, -3.0f), glm::vec3(3.0f, 2.1f, -4.0f), diamond));
+    
 }
 
 void render() {
     float fov = 3.1415/3;
     for (int y = 0; y < SCREEN_HEIGHT; y++) {
         for (int x = 0; x < SCREEN_WIDTH; x++) {
-
-            float random_value = static_cast<float>(std::rand())/static_cast<float>(RAND_MAX);
-            if (random_value < 0.0 ) {
-                continue;
-            }
 
             float screenX = (2.0f * (x + 0.5f)) / SCREEN_WIDTH - 1.0f;
             float screenY = -(2.0f * (y + 0.5f)) / SCREEN_HEIGHT + 1.0f;
@@ -177,7 +232,6 @@ void render() {
             );
            
             Color pixelColor = castRay(camera.position, rayDirection);
-            /* Color pixelColor = castRay(glm::vec3(0,0,20), glm::normalize(glm::vec3(screenX, screenY, -1.0f))); */
 
             point(glm::vec2(x, y), pixelColor);
         }
@@ -185,6 +239,7 @@ void render() {
 }
 
 int main(int argc, char* argv[]) {
+
     // Initialize SDL
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         SDL_Log("Unable to initialize SDL: %s", SDL_GetError());
@@ -213,6 +268,18 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    ImageLoader::loadImage("grass", "../assets/grama.jpg", 800.0f, 800.0f);
+    ImageLoader::loadImage("obsidian", "../assets/obsidian.jpg", 512.0f, 512.0f);
+    ImageLoader::loadImage("portal", "../assets/portal.jpg", 160.0f, 160.0f);
+    ImageLoader::loadImage("gold", "../assets/gold.jpg", 512.0f, 512.0f);
+    ImageLoader::loadImage("diamond", "../assets/diamond.jpg", 300.0f, 300.0f);
+    ImageLoader::loadImage("netherrack", "../assets/netherrack.jpeg", 400.0f, 400.0f);
+    ImageLoader::loadImage("stone", "../assets/stone.png", 800.0f, 800.0f);
+
+    ImageLoader::loadImage("upSky", "../assets/ceil.jpg", 4096.0f, 434.0f);
+    ImageLoader::loadImage("sideSky", "../assets/skybox.jpg", 4096.0f, 2160.0f);
+    ImageLoader::loadImage("floor", "../assets/floor.jpg", 1200.0f, 200.0f);
+
     bool running = true;
     SDL_Event event;
 
@@ -231,16 +298,28 @@ int main(int argc, char* argv[]) {
             if (event.type == SDL_KEYDOWN) {
                 switch(event.key.keysym.sym) {
                     case SDLK_UP:
-                        camera.move(-1.0f);
+                        camera.moveZ(-1.0f);
                         break;
                     case SDLK_DOWN:
-                        camera.move(1.0f);
+                        camera.moveZ(1.0f);
                         break;
                     case SDLK_LEFT:
                         camera.rotate(-1.0f, 0.0f);
                         break;
                     case SDLK_RIGHT:
                         camera.rotate(1.0f, 0.0f);
+                        break;
+                    case SDLK_w:
+                        camera.moveY(1.0f);
+                        break;
+                    case SDLK_s:
+                        camera.moveY(-1.0f);
+                        break;
+                    case SDLK_a:
+                        camera.moveX(-1.0f);
+                        break;
+                    case SDLK_d:
+                        camera.moveX(1.0f);
                         break;
                  }
             }
@@ -262,7 +341,7 @@ int main(int argc, char* argv[]) {
         // Calculate and display FPS
         if (SDL_GetTicks() - currentTime >= 1000) {
             currentTime = SDL_GetTicks();
-            std::string title = "Hello World - FPS: " + std::to_string(frameCount);
+            std::string title = "FPS: " + std::to_string(frameCount);
             SDL_SetWindowTitle(window, title.c_str());
             frameCount = 0;
         }
@@ -275,3 +354,4 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+

@@ -13,5 +13,11 @@ public:
 
   void rotate(float deltaX, float deltaY);
 
-  void move(float deltaZ);
+  void zoom(float deltaZ);
+
+  void moveX(float deltaX);
+
+  void moveY(float deltaY);
+
+  void moveZ(float deltaZ);
 };

@@ -9,11 +9,26 @@ void Camera::rotate(float deltaX, float deltaY) {
   glm::quat quatRotY = glm::angleAxis(glm::radians(deltaX * rotationSpeed), glm::vec3(0.0f, 1.0f, 0.0f));
   glm::quat quatRotX = glm::angleAxis(glm::radians(deltaY * rotationSpeed), glm::vec3(1.0f, 0.0f, 0.0f));
 
-  position = target + quatRotX * (position - target);
+  position = target + quatRotY * (position - target);
   position = target + quatRotY * (position - target);
 }
 
-void Camera::move(float deltaZ) {
+void Camera::zoom(float deltaZ) {
   glm::vec3 dir = glm::normalize(target - position);
   position += dir * deltaZ;
+}
+
+void Camera::moveX(float deltaX) {
+    position.x +=  deltaX;
+    target.x += deltaX;
+}
+
+void Camera::moveY(float deltaY) {
+    position.y += deltaY;
+    target.y += deltaY;
+}
+
+void Camera::moveZ(float deltaZ) {
+    position.z += deltaZ;
+    target.z += deltaZ;
 }
